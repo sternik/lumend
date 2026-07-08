@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useChannels } from '../hooks/useChannels'
 import { useEpg } from '../hooks/useEpg'
 import { ChannelList, type ChannelListHandle } from './channels/ChannelList'
@@ -67,11 +67,62 @@ export function MainScreen() {
 
   const currentChannel = channels[selectedIndex]
 
+  const hideChannelInfo = useCallback(() => {
+    if (channelInfoTimerRef.current) {
+      window.clearTimeout(channelInfoTimerRef.current)
+      channelInfoTimerRef.current = null
+    }
+    setShowChannelInfo(false)
+  }, [])
+
+  const showChannelInfoWithTimeout = useCallback(() => {
+    if (channelInfoTimerRef.current) {
+      window.clearTimeout(channelInfoTimerRef.current)
+    }
+    setShowChannelInfo(true)
+    channelInfoTimerRef.current = window.setTimeout(() => {
+      setShowChannelInfo(false)
+    }, 7000)
+  }, [])
+
+  const openChannelList = useCallback(() => {
+    setHighlightedIndex(selectedIndex)
+    hideChannelInfo()
+    setView('channelList')
+  }, [selectedIndex, hideChannelInfo])
+
+  const confirmChannelSelection = useCallback((index?: number) => {
+    setSelectedIndex(index !== undefined ? index : highlightedIndex)
+    setView('player')
+  }, [highlightedIndex])
+
+  const cancelChannelSelection = useCallback(() => {
+    setHighlightedIndex(selectedIndex)
+    setView('player')
+  }, [selectedIndex])
+
+  const openEpg = useCallback(() => {
+    hideChannelInfo()
+    setView('epg')
+  }, [hideChannelInfo])
+
+  const closeOverlay = useCallback(() => {
+    setView('player')
+  }, [])
+
+  const toggleChannelInfo = useCallback(() => {
+    if (showChannelInfo) {
+      hideChannelInfo()
+    } else {
+      showChannelInfoWithTimeout()
+    }
+  }, [showChannelInfo, hideChannelInfo, showChannelInfoWithTimeout])
+
   useEffect(() => {
     if (currentChannel) {
       showChannelInfoWithTimeout()
     }
-  }, [selectedIndex])
+  }, [currentChannel, selectedIndex, showChannelInfoWithTimeout])
 
   const initialInfoShown = useRef(false)
 
@@ -80,7 +131,7 @@ export function MainScreen() {
       initialInfoShown.current = true
       showChannelInfoWithTimeout()
     }
-  }, [currentChannel, view])
+  }, [currentChannel, view, showChannelInfoWithTimeout])
 
   const now = Date.now()
   const currentEvent = useMemo(() => {
@@ -94,57 +145,6 @@ export function MainScreen() {
       .filter((e) => e.channelId === currentChannel.id && e.start > now)
       .sort((a, b) => a.start - b.start)[0]
   }, [currentChannel, epgEvents, now])
-
-  const openChannelList = () => {
-    setHighlightedIndex(selectedIndex)
-    hideChannelInfo()
-    setView('channelList')
-  }
-
-  const confirmChannelSelection = (index?: number) => {
-    setSelectedIndex(index !== undefined ? index : highlightedIndex)
-    setView('player')
-  }
-
-  const cancelChannelSelection = () => {
-    setHighlightedIndex(selectedIndex)
-    setView('player')
-  }
-
-  const openEpg = () => {
-    hideChannelInfo()
-    setView('epg')
-  }
-
-  const closeOverlay = () => {
-    setView('player')
-  }
-
-  const hideChannelInfo = () => {
-    if (channelInfoTimerRef.current) {
-      window.clearTimeout(channelInfoTimerRef.current)
-      channelInfoTimerRef.current = null
-    }
-    setShowChannelInfo(false)
-  }
-
-  const showChannelInfoWithTimeout = () => {
-    if (channelInfoTimerRef.current) {
-      window.clearTimeout(channelInfoTimerRef.current)
-    }
-    setShowChannelInfo(true)
-    channelInfoTimerRef.current = window.setTimeout(() => {
-      setShowChannelInfo(false)
-    }, 7000)
-  }
-
-  const toggleChannelInfo = () => {
-    if (showChannelInfo) {
-      hideChannelInfo()
-    } else {
-      showChannelInfoWithTimeout()
-    }
-  }
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -253,7 +253,23 @@ export function MainScreen() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showSettingsConfirm, view, showChannelInfo, selectedIndex, highlightedIndex, channels.length])
+  }, [
+    showSettingsConfirm,
+    view,
+    showChannelInfo,
+    selectedIndex,
+    highlightedIndex,
+    channels.length,
+    openChannelList,
+    confirmChannelSelection,
+    cancelChannelSelection,
+    openEpg,
+    closeOverlay,
+    hideChannelInfo,
+    toggleChannelInfo,
+    setSelectedIndex,
+    setShowSettingsConfirm,
+  ])
 
   if (channelsLoading) {
     return (
