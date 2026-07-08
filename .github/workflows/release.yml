@@ -1,8 +1,9 @@
 name: Release webOS package
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   release:
@@ -28,10 +29,11 @@ jobs:
           npm run build
           npm run webos:package
 
-      - name: Upload IPK to release
+      - name: Create release and upload IPK
         uses: softprops/action-gh-release@v2
         with:
           files: |
             com.sternik.lumend_*_all.ipk
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
