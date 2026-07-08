@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSettingsStore } from '../stores/settingsStore'
 import { useChannels } from '../hooks/useChannels'
 import { useEpg } from '../hooks/useEpg'
 import { ChannelList, type ChannelListHandle } from './channels/ChannelList'
@@ -343,8 +344,7 @@ export function MainScreen() {
         <SettingsConfirmDialog
           onCancel={() => setShowSettingsConfirm(false)}
           onConfirm={() => {
-            localStorage.removeItem('tvh-client-settings')
-            window.location.reload()
+            useSettingsStore.setState({ isConfigured: false })
           }}
         />
       )}
