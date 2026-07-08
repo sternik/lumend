@@ -33,7 +33,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            com.sternik.lumend_*_all.ipk
+            Lumend-*.ipk
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
