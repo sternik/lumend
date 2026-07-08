@@ -1,0 +1,53 @@
+{
+  "name": "lumend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Lumend - a modern TVHeadend client for LG webOS TVs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:tvh": "tsx -r dotenv/config scripts/test-tvh-connection.ts",
+    "test:e2e": "playwright test",
+    "preview": "vite preview",
+    "webos:package": "npx -p @webos-tools/cli@3.2.5 ares-package --no-minify build service -o .",
+    "webos:emu": "npm run build && npx -p @webos-tools/cli@3.2.5 ares-package --no-minify build service -o . && npx -p @webos-tools/cli@3.2.5 ares-install com.sternik.lumend_0.1.0_all.ipk -d emulator && npx -p @webos-tools/cli@3.2.5 ares-launch com.sternik.lumend -d emulator",
+    "webos:tv": "npm run build && npx -p @webos-tools/cli@3.2.5 ares-package --no-minify build service -o . && npx -p @webos-tools/cli@3.2.5 ares-install com.sternik.lumend_0.1.0_all.ipk -d tv && npx -p @webos-tools/cli@3.2.5 ares-launch com.sternik.lumend -d tv",
+    "webos:inspect:emu": "npx -p @webos-tools/cli@3.2.5 ares-inspect -d emulator com.sternik.lumend --open",
+    "webos:inspect:tv": "npx -p @webos-tools/cli@3.2.5 ares-inspect -d tv com.sternik.lumend --open"
+  },
+  "dependencies": {
+    "@procot/webostv": "^1.2.6",
+    "@tanstack/react-query": "^5.101.2",
+    "clsx": "^2.1.1",
+    "dexie": "^4.4.4",
+    "lucide-react": "^1.23.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@tailwindcss/vite": "^4.3.2",
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "autoprefixer": "^10.5.2",
+    "dotenv": "^17.4.2",
+    "eslint": "^10.6.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "oxlint": "^1.71.0",
+    "postcss": "^8.5.16",
+    "prettier": "^3.9.4",
+    "tailwindcss": "^4.3.2",
+    "tsx": "^4.23.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "vitest": "^4.1.9"
+  }
+}

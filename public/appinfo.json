@@ -1,0 +1,12 @@
+{
+  "id": "com.sternik.lumend",
+  "version": "0.1.0",
+  "vendor": "sternik",
+  "type": "web",
+  "main": "index.html",
+  "title": "Lumend",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "iconColor": "#020617",
+  "disableBackHistoryAPI": true
+}
