@@ -13,9 +13,9 @@
     "test:tvh": "tsx -r dotenv/config scripts/test-tvh-connection.ts",
     "test:e2e": "playwright test",
     "preview": "vite preview",
-    "webos:package": "ares-package --no-minify build service -o .",
-    "webos:emu": "npm run build && ares-package --no-minify build service -o . && ares-install com.sternik.lumend_0.1.0_all.ipk -d emulator && ares-launch com.sternik.lumend -d emulator",
-    "webos:tv": "npm run build && ares-package --no-minify build service -o . && ares-install com.sternik.lumend_0.1.0_all.ipk -d tv && ares-launch com.sternik.lumend -d tv",
+    "webos:package": "ares-package --no-minify build service -o . && for f in com.sternik.lumend_*_all.ipk; do mv \"$f\" \"Lumend-${f##com.sternik.lumend_}\"; done && for f in Lumend-*_all.ipk; do mv \"$f\" \"${f/_all.ipk/.ipk}\"; done",
+    "webos:emu": "npm run build && npm run webos:package && ares-install $(ls Lumend-*.ipk) -d emulator && ares-launch com.sternik.lumend -d emulator",
+    "webos:tv": "npm run build && npm run webos:package && ares-install $(ls Lumend-*.ipk) -d tv && ares-launch com.sternik.lumend -d tv",
     "webos:inspect:emu": "ares-inspect -d emulator com.sternik.lumend --open",
     "webos:inspect:tv": "ares-inspect -d tv com.sternik.lumend --open"
   },
