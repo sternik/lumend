@@ -13,11 +13,11 @@
     "test:tvh": "tsx -r dotenv/config scripts/test-tvh-connection.ts",
     "test:e2e": "playwright test",
     "preview": "vite preview",
-    "webos:package": "npx -p @webos-tools/cli@3.2.5 ares-package --no-minify build service -o .",
-    "webos:emu": "npm run build && npx -p @webos-tools/cli@3.2.5 ares-package --no-minify build service -o . && npx -p @webos-tools/cli@3.2.5 ares-install com.sternik.lumend_0.1.0_all.ipk -d emulator && npx -p @webos-tools/cli@3.2.5 ares-launch com.sternik.lumend -d emulator",
-    "webos:tv": "npm run build && npx -p @webos-tools/cli@3.2.5 ares-package --no-minify build service -o . && npx -p @webos-tools/cli@3.2.5 ares-install com.sternik.lumend_0.1.0_all.ipk -d tv && npx -p @webos-tools/cli@3.2.5 ares-launch com.sternik.lumend -d tv",
-    "webos:inspect:emu": "npx -p @webos-tools/cli@3.2.5 ares-inspect -d emulator com.sternik.lumend --open",
-    "webos:inspect:tv": "npx -p @webos-tools/cli@3.2.5 ares-inspect -d tv com.sternik.lumend --open"
+    "webos:package": "ares-package --no-minify build service -o .",
+    "webos:emu": "npm run build && ares-package --no-minify build service -o . && ares-install com.sternik.lumend_0.1.0_all.ipk -d emulator && ares-launch com.sternik.lumend -d emulator",
+    "webos:tv": "npm run build && ares-package --no-minify build service -o . && ares-install com.sternik.lumend_0.1.0_all.ipk -d tv && ares-launch com.sternik.lumend -d tv",
+    "webos:inspect:emu": "ares-inspect -d emulator com.sternik.lumend --open",
+    "webos:inspect:tv": "ares-inspect -d tv com.sternik.lumend --open"
   },
   "dependencies": {
     "@procot/webostv": "^1.2.6",
@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@webos-tools/cli": "^3.2.5",
     "@tailwindcss/vite": "^4.3.2",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
