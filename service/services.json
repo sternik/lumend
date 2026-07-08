@@ -1,0 +1,16 @@
+{
+  "id": "com.sternik.lumend.proxy",
+  "description": "Proxy service for TVHeadend requests",
+  "services": [
+    {
+      "name": "com.sternik.lumend.proxy",
+      "description": "Forwards HTTP requests to the configured TVHeadend server",
+      "commands": [
+        {
+          "name": "request",
+          "public": false
+        }
+      ]
+    }
+  ]
+}

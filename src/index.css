@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+:root {
+  /* TV-optimized dark theme */
+  --tv-bg: #0a0a0f;
+  --tv-surface: #14141b;
+  --tv-surface-highlight: #1f1f2a;
+  --tv-border: #2a2a3a;
+  --tv-text: #e4e4e7;
+  --tv-text-muted: #a1a1aa;
+  --tv-accent: #3b82f6;
+  --tv-accent-glow: rgba(59, 130, 246, 0.3);
+  --tv-danger: #ef4444;
+  --tv-success: #22c55e;
+
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 22px;
+  line-height: 1.4;
+  color: var(--tv-text);
+  background-color: var(--tv-bg);
+
+  /* Optimize text rendering for TV screens */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  /* Prevent text selection with remote */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--tv-bg);
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Focus styles for TV navigation */
+:focus-visible {
+  outline: none;
+}
+
+.focus-ring:focus,
+.focus-ring:focus-visible {
+  outline: 3px solid var(--tv-accent);
+  outline-offset: 4px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 6px var(--tv-accent-glow);
+}
+
+/* Scrollbars hidden for TV – navigation via remote only */
+::-webkit-scrollbar {
+  display: none;
+}
+
+/* Utility helpers */
+.tv-text-shadow {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
