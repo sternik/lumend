@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="public/icon.png" alt="Lumend" width="120" />
-</p>
-
 # Lumend
 
 A modern, lightweight TVHeadend client for LG webOS TVs (2024-2026 models).
