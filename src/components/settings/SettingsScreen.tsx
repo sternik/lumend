@@ -46,11 +46,14 @@ export function SettingsScreen() {
     return order
   }, [showAuth, testPassed])
 
+  const envUrlSet = useRef(false)
   useEffect(() => {
+    if (envUrlSet.current) return
     if (!settings.tvhUrl && import.meta.env.VITE_TVH_URL) {
+      envUrlSet.current = true
       setForm((prev) => ({ ...prev, tvhUrl: import.meta.env.VITE_TVH_URL }))
     }
-  }, [])
+  }, [settings.tvhUrl])
 
   useEffect(() => {
     if (initialFocusSet.current) return
