@@ -15,6 +15,16 @@ control navigation.
 - Remote-first navigation: D-pad, OK, Back, Channel +/-, Page Up/Down
 - webOS app packaging and simulator support
 
+## Screenshots
+
+| Setup | Channel List |
+|-------|-------------|
+| ![Setup](docs/screenshots/01-setup-screen.png) | ![Channel List](docs/screenshots/02-channel-list.png) |
+
+| Channel Info | EPG Guide |
+|-------------|-----------|
+| ![Channel Info](docs/screenshots/03-channel-info.png) | ![EPG Guide](docs/screenshots/04-epg-guide.png) |
+
 ## Tech Stack
 
 - **React 19** + **TypeScript**
