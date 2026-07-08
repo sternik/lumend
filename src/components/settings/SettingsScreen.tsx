@@ -4,7 +4,6 @@ import { createTvheadendApi } from '../../services/tvheadend/api'
 import type { Settings, ConnectionTestResult } from '../../types/settings'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
-import { Textarea } from '../ui/Textarea'
 
 const DEFAULT_TEST_RESULT: ConnectionTestResult = {
   serverInfo: { success: false, message: '' },
@@ -203,7 +202,7 @@ export function SettingsScreen() {
         <p className="text-[var(--tv-text-muted)] text-center mb-8">Configure connection to your TVHeadend server</p>
 
         <div className="flex flex-col gap-5">
-          <Textarea
+          <Input
             ref={setRef('url')}
             onFocus={handleFocus(focusOrder.indexOf('url'))}
             label="TVHeadend server URL"
