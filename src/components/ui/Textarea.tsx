@@ -11,6 +11,10 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     const inputId = props.id || generatedId
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+      }
+
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault()
       }
