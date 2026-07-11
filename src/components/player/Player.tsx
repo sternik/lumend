@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 import type { Channel } from '../../types/channel'
 import type { EpgEvent } from '../../types/epg'
@@ -25,63 +25,13 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
   const [error, setError] = useState<string | null>(null)
   const retryCountRef = useRef(0)
   const retryTimerRef = useRef<number | null>(null)
+  const mountedRef = useRef(true)
 
   const streamUrl = createTvheadendApi(settings).getStreamUrl(channel)
 
-  const startPlayback = useCallback((url: string) => {
-    const video = videoRef.current
-    if (!video) return
-
-    // Remove previous sources and add the new one, keeping the same <video> element.
-    while (video.firstChild) {
-      video.removeChild(video.firstChild)
-    }
-
-    const source = document.createElement('source')
-    source.setAttribute('src', url)
-    video.appendChild(source)
-    video.load()
-
-    const handlePlaying = () => {
-      setIsPlaying(true)
-    }
-    const handleError = () => {
-      if (retryCountRef.current < MAX_RETRIES) {
-        retryCountRef.current++
-        retryTimerRef.current = window.setTimeout(() => {
-          setError(null)
-          startPlayback(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now())
-        }, RETRY_DELAY_MS)
-      } else {
-        setError('No signal')
-      }
-
-      setIsPlaying(false)
-    }
-
-    video.addEventListener('playing', handlePlaying)
-    video.addEventListener('error', handleError)
-
-    const playPromise = video.play()
-    if (playPromise !== undefined) {
-      playPromise.catch((err) => {
-        if (err instanceof Error && err.name === 'AbortError') return
-        if (retryCountRef.current < MAX_RETRIES) {
-          retryCountRef.current++
-          retryTimerRef.current = window.setTimeout(() => {
-            setError(null)
-            startPlayback(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now())
-          }, RETRY_DELAY_MS)
-        } else {
-          setError('No signal')
-        }
-      })
-    }
-
-    return () => {
-      video.removeEventListener('playing', handlePlaying)
-      video.removeEventListener('error', handleError)
-    }
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
   }, [])
 
   useEffect(() => {
@@ -98,19 +48,86 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
       retryTimerRef.current = null
     }
 
-    const cleanup = startPlayback(streamUrl)
+    let cancelled = false
+    let handlers: Array<() => void> = []
+
+    function loadUrl(url: string) {
+      if (cancelled || !video) return
+
+      // Clean up previous source and listeners
+      handlers.forEach((h) => h())
+      handlers = []
+      while (video.firstChild) {
+        video.removeChild(video.firstChild)
+      }
+
+      const source = document.createElement('source')
+      source.setAttribute('src', url)
+      video.appendChild(source)
+      video.load()
+
+      const handlePlaying = () => {
+        if (!cancelled) setIsPlaying(true)
+      }
+      const handleError = () => {
+        if (cancelled) return
+        setIsPlaying(false)
+
+        if (retryCountRef.current < MAX_RETRIES) {
+          retryCountRef.current++
+          retryTimerRef.current = window.setTimeout(() => {
+            if (!cancelled) {
+              setError(null)
+              loadUrl(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now())
+            }
+          }, RETRY_DELAY_MS)
+        } else {
+          setError('No signal')
+        }
+      }
+
+      video.addEventListener('playing', handlePlaying)
+      video.addEventListener('error', handleError)
+      handlers.push(() => {
+        video.removeEventListener('playing', handlePlaying)
+        video.removeEventListener('error', handleError)
+      })
+
+      const playPromise = video.play()
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          if (cancelled) return
+          if (err instanceof Error && err.name === 'AbortError') return
+
+          if (retryCountRef.current < MAX_RETRIES) {
+            retryCountRef.current++
+            retryTimerRef.current = window.setTimeout(() => {
+              if (!cancelled) {
+                setError(null)
+                loadUrl(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now())
+              }
+            }, RETRY_DELAY_MS)
+          } else {
+            setError('No signal')
+          }
+        })
+      }
+    }
+
+    loadUrl(streamUrl)
 
     return () => {
-      cleanup?.()
+      cancelled = true
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current)
         retryTimerRef.current = null
       }
+      handlers.forEach((h) => h())
       while (video.firstChild) {
         video.removeChild(video.firstChild)
       }
     }
-  }, [streamUrl, startPlayback])
+  }, [streamUrl])
 
   if (!visible) return null
 
@@ -126,7 +143,7 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
       />
 
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
           <div className="text-center p-6">
             <div className="text-white text-2xl font-bold mb-2">No signal</div>
             <div className="text-[var(--tv-text-muted)] text-base">{channel.name}</div>
@@ -190,7 +207,7 @@ function ChannelInfoOverlay({ channel, channelIndex, currentEvent, nextEvent, is
       <div className="flex items-start gap-6 max-w-6xl">
         <div className="w-28 h-28 shrink-0 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden border border-white/10">
           {channel.iconUrl ? (
-            <img src={channel.iconUrl} alt="" className="w-full h-full object-contain p-2" />
+            <ChannelLogo iconUrl={channel.iconUrl} fallback={channelIndex + 1} />
           ) : (
             <span className="text-2xl font-bold text-white/70">{channelIndex + 1}</span>
           )}
@@ -252,4 +269,12 @@ function ChannelInfoOverlay({ channel, channelIndex, currentEvent, nextEvent, is
       </div>
     </div>
   )
+}
+
+function ChannelLogo({ iconUrl, fallback }: { iconUrl: string; fallback: number }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return <span className="text-2xl font-bold text-white/70">{fallback}</span>
+  }
+  return <img src={iconUrl} alt="" className="w-full h-full object-contain p-2" onError={() => setFailed(true)} />
 }
