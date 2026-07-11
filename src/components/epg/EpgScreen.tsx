@@ -28,16 +28,13 @@ export function EpgScreen({
 }: EpgScreenProps) {
   const [timeOffset, setTimeOffset] = useState(0)
   const [highlightedChannelIndex, setHighlightedChannelIndex] = useState(selectedChannelIndex)
-  const [readyToConfirm, setReadyToConfirm] = useState(false)
+  const [focusedEventId, setFocusedEventId] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const containerRef = useRef<HTMLDivElement>(null)
   const rowsRef = useRef<Array<HTMLDivElement | null>>([])
 
   const highlightedIndexRef = useRef(highlightedChannelIndex)
   highlightedIndexRef.current = highlightedChannelIndex
-
-  const readyToConfirmRef = useRef(readyToConfirm)
-  readyToConfirmRef.current = readyToConfirm
 
   // Freeze "now" when the guide opens and refresh it once per minute. This avoids
   // recalculating the whole grid on every render while navigating.
@@ -52,7 +49,7 @@ export function EpgScreen({
     if (visible) {
       setHighlightedChannelIndex(selectedChannelIndex)
       setTimeOffset(0)
-      setReadyToConfirm(false)
+      setFocusedEventId(null)
     }
   }, [visible, selectedChannelIndex])
 
@@ -97,10 +94,24 @@ export function EpgScreen({
     return current?.id || null
   }, [visibleEvents, highlightedChannel, now])
 
-  const selectedEvent = useMemo(() => {
-    if (!selectedEventId || !highlightedChannel) return undefined
-    return visibleEvents.find((e) => e.channelId === highlightedChannel.id && e.id === selectedEventId)
-  }, [visibleEvents, highlightedChannel, selectedEventId])
+  // All events for the highlighted channel, sorted by start time.
+  const channelEvents = useMemo(() => {
+    if (!highlightedChannel) return []
+    return epgEvents
+      .filter((e) => e.channelId === highlightedChannel.id)
+      .sort((a, b) => a.start - b.start)
+  }, [epgEvents, highlightedChannel])
+
+  // The event currently focused in the header — either user-navigated or the current one.
+  const focusedEvent = useMemo(() => {
+    if (!highlightedChannel) return undefined
+    if (focusedEventId) {
+      const found = channelEvents.find((e) => e.id === focusedEventId)
+      if (found) return found
+    }
+    // Fall back to the current event.
+    return channelEvents.find((e) => e.start <= now && e.stop > now)
+  }, [channelEvents, focusedEventId, highlightedChannel, now])
 
   // Keep stable references to the callbacks so the global key listener does not
   // need to be re-attached on every render of the parent.
@@ -111,15 +122,10 @@ export function EpgScreen({
     onCloseRef.current = onClose
   }, [onChannelSelect, onClose])
 
-  // Stable handler for row clicks: clicking the same row twice confirms the selection.
+  // Stable handler for row clicks: clicking a row switches to that channel.
   const handleRowSelect = useCallback((index: number) => {
-    if (index === highlightedIndexRef.current && readyToConfirmRef.current) {
-      onChannelSelectRef.current(index)
-      onCloseRef.current()
-    } else {
-      setHighlightedChannelIndex(index)
-      setReadyToConfirm(true)
-    }
+    onChannelSelectRef.current(index)
+    onCloseRef.current()
   }, [])
 
   // Global key listener: the simulator remote buttons can steal focus from the
@@ -138,40 +144,43 @@ export function EpgScreen({
 
       if (isArrowUp) {
         e.preventDefault()
-        setReadyToConfirm(false)
         setHighlightedChannelIndex((idx) => (idx > 0 ? idx - 1 : channels.length - 1))
+        setFocusedEventId(null)
         return
       }
 
       if (isArrowDown) {
         e.preventDefault()
-        setReadyToConfirm(false)
         setHighlightedChannelIndex((idx) => (idx < channels.length - 1 ? idx + 1 : 0))
+        setFocusedEventId(null)
         return
       }
 
-      if (isArrowLeft) {
+      if (isArrowLeft || isArrowRight) {
         e.preventDefault()
-        setReadyToConfirm(false)
-        setTimeOffset((o) => o - 0.5)
-        return
-      }
-
-      if (isArrowRight) {
-        e.preventDefault()
-        setReadyToConfirm(false)
-        setTimeOffset((o) => o + 0.5)
+        const step = isArrowLeft ? -1 : 1
+        setFocusedEventId((currentId) => {
+          // Find current index in the channel's events list.
+          const idx = channelEvents.findIndex((ev) => ev.id === currentId)
+          if (idx === -1) {
+            // No event focused yet — jump to the first event before/after now.
+            const afterNow = channelEvents.filter((ev) => ev.start > now)
+            const beforeNow = channelEvents.filter((ev) => ev.stop <= now)
+            if (isArrowRight && afterNow.length > 0) return afterNow[0].id
+            if (!isArrowRight && beforeNow.length > 0) return beforeNow[beforeNow.length - 1].id
+            return currentId
+          }
+          const nextIdx = idx + step
+          if (nextIdx < 0 || nextIdx >= channelEvents.length) return currentId
+          return channelEvents[nextIdx].id
+        })
         return
       }
 
       if (isEnter) {
         e.preventDefault()
-        if (readyToConfirm) {
-          onChannelSelectRef.current(highlightedIndexRef.current)
-          onCloseRef.current()
-        } else {
-          setReadyToConfirm(true)
-        }
+        onChannelSelectRef.current(highlightedIndexRef.current)
+        onCloseRef.current()
         return
       }
 
@@ -183,14 +192,15 @@ export function EpgScreen({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [visible, channels.length, readyToConfirm])
+  }, [visible, channels.length, channelEvents, now])
 
   // Scroll the highlighted row into view synchronously before the browser paints.
-  // Read absolute position from the DOM so it always matches real layout.
+  // Offset by one row height so the next channel is always visible as a preview.
   useLayoutEffect(() => {
     const container = containerRef.current
     const row = rowsRef.current[highlightedChannelIndex]
-    if (!container || !row) return
+    const lastRow = rowsRef.current[channels.length - 1]
+    if (!container || !row || !lastRow) return
 
     const clientHeight = container.clientHeight
     if (clientHeight === 0) return
@@ -200,14 +210,15 @@ export function EpgScreen({
     const rowBottom = rowTop + rowHeight
     const viewTop = container.scrollTop
     const viewBottom = viewTop + clientHeight
+    const peek = rowHeight
+    const maxScroll = Math.max(0, lastRow.offsetTop + lastRow.offsetHeight - clientHeight)
 
-    if (rowTop < viewTop) {
-      container.scrollTop = rowTop
-    } else if (rowBottom > viewBottom) {
-      const maxScroll = container.scrollHeight - clientHeight
-      container.scrollTop = Math.min(rowBottom - clientHeight, maxScroll)
+    if (rowTop - peek < viewTop) {
+      container.scrollTop = Math.max(0, rowTop - peek)
+    } else if (rowBottom + peek > viewBottom) {
+      container.scrollTop = Math.min(rowBottom + peek - clientHeight, maxScroll)
     }
-  }, [highlightedChannelIndex, visible])
+  }, [highlightedChannelIndex, visible, channels.length])
 
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -246,22 +257,22 @@ export function EpgScreen({
 
         <div className="flex items-start gap-8 overflow-hidden" style={{ height: '7.5rem' }}>
           <div className="flex-1 min-w-0 flex flex-col">
-            {selectedEvent && highlightedChannel ? (
+            {focusedEvent && highlightedChannel ? (
               <>
                 <div className="text-xl font-semibold truncate">
-                  {highlightedChannel.name} — {selectedEvent.title}
+                  {highlightedChannel.name} — {focusedEvent.title}
                 </div>
-                {selectedEvent.subtitle && (
-                  <div className="text-base text-white/70 truncate">{selectedEvent.subtitle}</div>
+                {focusedEvent.subtitle && (
+                  <div className="text-base text-white/70 truncate">{focusedEvent.subtitle}</div>
                 )}
                 <div className="text-sm text-[var(--tv-text-muted)] mt-1">
-                  {formatTime(selectedEvent.start)} - {formatTime(selectedEvent.stop)}
+                  {formatTime(focusedEvent.start)} - {formatTime(focusedEvent.stop)}
                   {' · '}
-                  {Math.round((selectedEvent.stop - selectedEvent.start) / 60000)} min
+                  {Math.round((focusedEvent.stop - focusedEvent.start) / 60000)} min
                 </div>
-                {selectedEvent.description && (
+                {focusedEvent.description && (
                   <div className="text-sm text-white/60 mt-2 line-clamp-4">
-                    {selectedEvent.description}
+                    {focusedEvent.description}
                   </div>
                 )}
               </>
@@ -334,7 +345,7 @@ export function EpgScreen({
                 index={index}
                 isHighlighted={index === highlightedChannelIndex}
                 events={eventsByChannel.get(channel.id) || EMPTY_EVENTS}
-                selectedEventId={index === highlightedChannelIndex ? selectedEventId : null}
+                selectedEventId={index === highlightedChannelIndex ? focusedEvent?.id ?? selectedEventId : null}
                 windowStart={windowStart}
                 windowEnd={windowEnd}
                 windowDuration={windowDuration}
@@ -350,7 +361,7 @@ export function EpgScreen({
 
       {/* Footer hint */}
       <div className="shrink-0 px-6 py-3 border-t border-white/10 text-sm text-[var(--tv-text-muted)] flex items-center justify-between">
-        <span>UP/DOWN: channel · LEFT/RIGHT: time · ENTER: {readyToConfirm ? 'confirm' : 'select'} · BACK: close</span>
+        <span>UP/DOWN: channel · LEFT/RIGHT: programme · OK: switch · BACK: close</span>
       </div>
     </div>
   )
