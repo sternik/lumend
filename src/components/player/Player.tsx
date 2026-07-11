@@ -5,8 +5,9 @@ import type { EpgEvent } from '../../types/epg'
 import { createTvheadendApi } from '../../services/tvheadend/api'
 import { useSettingsStore } from '../../stores/settingsStore'
 
-const MAX_RETRIES = 3
-const RETRY_DELAY_MS = 2000
+const MAX_RETRIES = 1
+const RETRY_DELAY_MS = 0
+const PLAYBACK_TIMEOUT_MS = 8000
 
 interface PlayerProps {
   channel: Channel
@@ -25,38 +26,69 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
   const [error, setError] = useState<string | null>(null)
   const retryCountRef = useRef(0)
   const retryTimerRef = useRef<number | null>(null)
-  const mountedRef = useRef(true)
+  const timeoutRef = useRef<number | null>(null)
 
   const streamUrl = createTvheadendApi(settings).getStreamUrl(channel)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => { mountedRef.current = false }
-  }, [])
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
-    // Reset retries on channel change
     retryCountRef.current = 0
     setError(null)
     setIsPlaying(false)
 
-    if (retryTimerRef.current) {
-      clearTimeout(retryTimerRef.current)
-      retryTimerRef.current = null
-    }
+    clearTimers()
 
     let cancelled = false
-    let handlers: Array<() => void> = []
+
+    function clearTimers() {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+    }
+
+    function scheduleRetry(url: string) {
+      if (cancelled) return
+      clearTimers()
+
+      if (retryCountRef.current < MAX_RETRIES) {
+        retryCountRef.current++
+        console.log(`[Player] Retry ${retryCountRef.current}/${MAX_RETRIES} for ${channel.name}`)
+        retryTimerRef.current = window.setTimeout(() => {
+          if (!cancelled) {
+            setError(null)
+            loadUrl(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now())
+          }
+        }, RETRY_DELAY_MS)
+      } else {
+        console.log(`[Player] All retries exhausted for ${channel.name}`)
+        setError('No signal')
+      }
+    }
+
+    function startPlaybackTimeout(url: string) {
+      clearTimers()
+      timeoutRef.current = window.setTimeout(() => {
+        if (!cancelled && !isPlaying) {
+          console.log(`[Player] Playback timeout for ${channel.name}`)
+          scheduleRetry(url)
+        }
+      }, PLAYBACK_TIMEOUT_MS)
+    }
 
     function loadUrl(url: string) {
       if (cancelled || !video) return
 
-      // Clean up previous source and listeners
-      handlers.forEach((h) => h())
-      handlers = []
+      console.log(`[Player] Loading: ${url}`)
+      setIsPlaying(false)
+
+      // Remove old sources and listeners
       while (video.firstChild) {
         video.removeChild(video.firstChild)
       }
@@ -67,67 +99,52 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
       video.load()
 
       const handlePlaying = () => {
-        if (!cancelled) setIsPlaying(true)
+        console.log(`[Player] Playing: ${channel.name}`)
+        if (!cancelled) {
+          setIsPlaying(true)
+          clearTimers()
+        }
       }
       const handleError = () => {
-        if (cancelled) return
-        setIsPlaying(false)
-
-        if (retryCountRef.current < MAX_RETRIES) {
-          retryCountRef.current++
-          retryTimerRef.current = window.setTimeout(() => {
-            if (!cancelled) {
-              setError(null)
-              loadUrl(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now())
-            }
-          }, RETRY_DELAY_MS)
-        } else {
-          setError('No signal')
+        console.log(`[Player] Error event for ${channel.name}:`, video.error)
+        if (!cancelled) {
+          scheduleRetry(url)
         }
       }
 
       video.addEventListener('playing', handlePlaying)
       video.addEventListener('error', handleError)
-      handlers.push(() => {
-        video.removeEventListener('playing', handlePlaying)
-        video.removeEventListener('error', handleError)
-      })
 
       const playPromise = video.play()
       if (playPromise !== undefined) {
         playPromise.catch((err) => {
+          console.log(`[Player] play() rejected for ${channel.name}:`, err?.name, err?.message)
           if (cancelled) return
           if (err instanceof Error && err.name === 'AbortError') return
-
-          if (retryCountRef.current < MAX_RETRIES) {
-            retryCountRef.current++
-            retryTimerRef.current = window.setTimeout(() => {
-              if (!cancelled) {
-                setError(null)
-                loadUrl(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now())
-              }
-            }, RETRY_DELAY_MS)
-          } else {
-            setError('No signal')
-          }
+          scheduleRetry(url)
         })
+      }
+
+      // Start timeout — if nothing happens in PLAYBACK_TIMEOUT_MS, retry
+      startPlaybackTimeout(url)
+
+      return () => {
+        video.removeEventListener('playing', handlePlaying)
+        video.removeEventListener('error', handleError)
       }
     }
 
-    loadUrl(streamUrl)
+    const cleanup = loadUrl(streamUrl)
 
     return () => {
       cancelled = true
-      if (retryTimerRef.current) {
-        clearTimeout(retryTimerRef.current)
-        retryTimerRef.current = null
-      }
-      handlers.forEach((h) => h())
+      clearTimers()
+      cleanup?.()
       while (video.firstChild) {
         video.removeChild(video.firstChild)
       }
     }
-  }, [streamUrl])
+  }, [streamUrl, channel.name])
 
   if (!visible) return null
 
@@ -147,7 +164,9 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
           <div className="text-center p-6">
             <div className="text-white text-2xl font-bold mb-2">No signal</div>
             <div className="text-[var(--tv-text-muted)] text-base">{channel.name}</div>
-            <div className="text-[var(--tv-text-muted)] text-sm mt-1">Retrying connection...</div>
+            <div className="text-[var(--tv-text-muted)] text-sm mt-1">
+              {retryCountRef.current < MAX_RETRIES ? 'Retrying connection...' : 'Unable to connect to stream'}
+            </div>
           </div>
         </div>
       )}
