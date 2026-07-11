@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 import type { Channel } from '../../types/channel'
 import type { EpgEvent } from '../../types/epg'
 import { createTvheadendApi } from '../../services/tvheadend/api'
 import { useSettingsStore } from '../../stores/settingsStore'
+
+const MAX_RETRIES = 3
+const RETRY_DELAY_MS = 2000
 
 interface PlayerProps {
   channel: Channel
@@ -20,14 +23,14 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const retryCountRef = useRef(0)
+  const retryTimerRef = useRef<number | null>(null)
 
   const streamUrl = createTvheadendApi(settings).getStreamUrl(channel)
 
-  useEffect(() => {
+  const startPlayback = useCallback((url: string) => {
     const video = videoRef.current
     if (!video) return
-
-    setError(null)
 
     // Remove previous sources and add the new one, keeping the same <video> element.
     while (video.firstChild) {
@@ -35,7 +38,7 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
     }
 
     const source = document.createElement('source')
-    source.setAttribute('src', streamUrl)
+    source.setAttribute('src', url)
     video.appendChild(source)
     video.load()
 
@@ -43,9 +46,16 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
       setIsPlaying(true)
     }
     const handleError = () => {
-      const videoError = video.error
-      const message = videoError ? `code:${videoError.code} ${videoError.message || ''}` : 'unknown video error'
-      setError(message)
+      if (retryCountRef.current < MAX_RETRIES) {
+        retryCountRef.current++
+        retryTimerRef.current = window.setTimeout(() => {
+          setError(null)
+          startPlayback(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now())
+        }, RETRY_DELAY_MS)
+      } else {
+        setError('No signal')
+      }
+
       setIsPlaying(false)
     }
 
@@ -55,21 +65,52 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
     const playPromise = video.play()
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
-        // Ignore "interrupted by load" — it's expected when switching channels fast.
         if (err instanceof Error && err.name === 'AbortError') return
-        setError(err instanceof Error ? err.message : 'Unable to start playback')
+        if (retryCountRef.current < MAX_RETRIES) {
+          retryCountRef.current++
+          retryTimerRef.current = window.setTimeout(() => {
+            setError(null)
+            startPlayback(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now())
+          }, RETRY_DELAY_MS)
+        } else {
+          setError('No signal')
+        }
       })
     }
 
     return () => {
       video.removeEventListener('playing', handlePlaying)
       video.removeEventListener('error', handleError)
+    }
+  }, [])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    // Reset retries on channel change
+    retryCountRef.current = 0
+    setError(null)
+    setIsPlaying(false)
+
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
+
+    const cleanup = startPlayback(streamUrl)
+
+    return () => {
+      cleanup?.()
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
       while (video.firstChild) {
         video.removeChild(video.firstChild)
       }
-      // Keep the <video> element in the DOM; only clear its sources.
     }
-  }, [streamUrl])
+  }, [streamUrl, startPlayback])
 
   if (!visible) return null
 
@@ -87,8 +128,9 @@ export function Player({ channel, channelIndex, currentEvent, nextEvent, visible
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80">
           <div className="text-center p-6">
-            <div className="text-[var(--tv-danger)] text-xl mb-2">Playback error</div>
-            <div className="text-[var(--tv-text-muted)]">{error}</div>
+            <div className="text-white text-2xl font-bold mb-2">No signal</div>
+            <div className="text-[var(--tv-text-muted)] text-base">{channel.name}</div>
+            <div className="text-[var(--tv-text-muted)] text-sm mt-1">Retrying connection...</div>
           </div>
         </div>
       )}
