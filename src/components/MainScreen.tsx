@@ -289,6 +289,15 @@ export function MainScreen() {
           {channelsError instanceof Error ? channelsError.message : 'Check the server address and network connection.'}
         </div>
         <Button onClick={() => setShowSettingsConfirm(true)}>Open settings</Button>
+
+        {showSettingsConfirm && (
+          <SettingsConfirmDialog
+            onCancel={() => setShowSettingsConfirm(false)}
+            onConfirm={() => {
+              useSettingsStore.setState({ isConfigured: false })
+            }}
+          />
+        )}
       </div>
     )
   }
@@ -298,6 +307,15 @@ export function MainScreen() {
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <div className="text-xl">No channels found</div>
         <Button onClick={() => setShowSettingsConfirm(true)}>Open settings</Button>
+
+        {showSettingsConfirm && (
+          <SettingsConfirmDialog
+            onCancel={() => setShowSettingsConfirm(false)}
+            onConfirm={() => {
+              useSettingsStore.setState({ isConfigured: false })
+            }}
+          />
+        )}
       </div>
     )
   }
