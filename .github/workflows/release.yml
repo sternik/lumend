@@ -29,11 +29,21 @@ jobs:
           npm run build
           npm run webos:package
 
+      - name: Extract release notes
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          # Extract section between ## vX.Y.Z and the next ## or EOF
+          awk "/^## ${GITHUB_REF_NAME}/{found=1; next} /^## /{if(found) exit} found{print}" CHANGELOG.md > release-body.md
+          if [ ! -s release-body.md ]; then
+            echo "No release notes found for ${GITHUB_REF_NAME} in CHANGELOG.md"
+            exit 1
+          fi
+
       - name: Create release and upload IPK
         uses: softprops/action-gh-release@v3
         with:
+          body_path: release-body.md
           files: |
             Lumend-*.ipk
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
