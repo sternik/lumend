@@ -89,9 +89,33 @@ export function createTvheadendApi(settings: Settings) {
   }
 
   function getStreamUrl(channel: Channel) {
-    // Use the exact stream URL returned by TVHeadend in the M3U playlist.
-    // It contains the correct numeric channel id and the auth token when applicable.
-    return channel.streamUrl
+    // Get the stream URL from the channel (from M3U playlist)
+    let streamUrl = channel.streamUrl
+
+    // If we have credentials, inject them into the stream URL
+    const credentials = client.getCredentials()
+    if (credentials && streamUrl) {
+      try {
+        // If the stream URL is relative, resolve it against the base URL
+        const base = new URL(client.getBaseUrl())
+        const stream = new URL(streamUrl, base)
+
+        // Inject credentials into the stream URL
+        stream.username = credentials.split(':')[0] || ''
+        stream.password = credentials.split(':').slice(1).join(':') || ''
+
+        streamUrl = stream.toString()
+      } catch {
+        // If URL parsing fails, try to inject credentials manually
+        if (streamUrl.startsWith('/')) {
+          const base = new URL(client.getBaseUrl())
+          const authHost = `${credentials}@${base.host}`
+          streamUrl = `${base.protocol}//${authHost}${streamUrl}`
+        }
+      }
+    }
+
+    return streamUrl
   }
 
   return {
